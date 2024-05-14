@@ -3,6 +3,7 @@ package com.github.clevernucleus.opc.impl;
 import java.util.Collection;
 import java.util.UUID;
 
+import com.github.clevernucleus.opc.CacheInitializer;
 import com.github.clevernucleus.opc.api.CacheableValue;
 import com.github.clevernucleus.opc.api.OfflinePlayerCache;
 
@@ -14,7 +15,7 @@ public final class OfflinePlayerCacheProvider implements OfflinePlayerCache {
 	
 	public OfflinePlayerCacheProvider(final MinecraftServer server) {
 		this.server = server;
-		this.impl = OfflinePlayerCacheImpl.ifPresent(server, (OfflinePlayerCacheImpl)null, opc -> opc);
+		this.impl = CacheInitializer.CACHE.get(server.getOverworld().getLevelProperties());
 	}
 	
 	public boolean isEmpty() {

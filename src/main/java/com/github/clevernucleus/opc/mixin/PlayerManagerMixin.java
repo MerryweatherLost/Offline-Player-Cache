@@ -2,6 +2,7 @@ package com.github.clevernucleus.opc.mixin;
 
 import java.util.List;
 
+import com.github.clevernucleus.opc.CacheInitializer;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -26,21 +27,15 @@ abstract class PlayerManagerMixin {
 	@Final
 	@Shadow
 	List<ServerPlayerEntity> players;
-	
+
 	@Inject(method = "onPlayerConnect", at = @At("TAIL"))
 	private void opc_onPlayerConnect(ClientConnection connection, ServerPlayerEntity player, CallbackInfo info) {
-		OfflinePlayerCacheImpl.ifPresent(this.server, (Object)null, opc -> {
-			opc.uncache(player);
-			return (Object)null;
-		});
+		CacheInitializer.CACHE.maybeGet(this.server.getOverworld().getLevelProperties()).ifPresent(opc -> opc.uncache(player));
 	}
 	
 	@Inject(method = "remove", at = @At("HEAD"))
 	private void opc_remove(ServerPlayerEntity player, CallbackInfo info) {
-		OfflinePlayerCacheImpl.ifPresent(this.server, (Object)null, opc -> {
-			opc.cache(player);
-			return (Object)null;
-		});
+		CacheInitializer.CACHE.maybeGet(this.server.getOverworld().getLevelProperties()).ifPresent(opc -> opc.cache(player));
 	}
 	
 	/*
@@ -60,12 +55,8 @@ abstract class PlayerManagerMixin {
 	 */
 	@Inject(method = "disconnectAllPlayers", at = @At("HEAD"))
 	private void opc_disconnectAllPlayers(CallbackInfo info) {
-		OfflinePlayerCacheImpl.ifPresent(this.server, (Object)null, opc -> {
-			for(int i = 0; i < this.players.size(); i++) {
-				opc.cache(this.players.get(i));
-			}
-			
-			return (Object)null;
+		CacheInitializer.CACHE.maybeGet(this.server.getOverworld().getLevelProperties()).ifPresent(opc -> {
+			this.players.forEach(opc::cache);
 		});
 	}
 }

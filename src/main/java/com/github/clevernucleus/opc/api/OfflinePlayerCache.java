@@ -4,6 +4,9 @@ import java.util.Collection;
 import java.util.UUID;
 import java.util.function.Function;
 
+import com.github.clevernucleus.opc.impl.OfflinePlayerCacheImpl;
+import com.github.clevernucleus.opc.impl.OfflinePlayerCacheProvider;
+
 import net.minecraft.server.MinecraftServer;
 
 /**
@@ -23,7 +26,7 @@ public interface OfflinePlayerCache {
 	 * @return
 	 */
 	public static <V> CacheableValue<V> register(final CacheableValue<V> key) {
-		return com.github.clevernucleus.opc.impl.OfflinePlayerCacheImpl.register(key);
+		return OfflinePlayerCacheImpl.register(key);
 	}
 	
 	/**
@@ -35,7 +38,7 @@ public interface OfflinePlayerCache {
 	 * @return
 	 */
 	public static <T> T getOfflinePlayerCache(final MinecraftServer server, final T fallback, final Function<OfflinePlayerCache, T> function) {
-		com.github.clevernucleus.opc.impl.OfflinePlayerCacheProvider provider = new com.github.clevernucleus.opc.impl.OfflinePlayerCacheProvider(server);
+		OfflinePlayerCacheProvider provider = new OfflinePlayerCacheProvider(server);
 		
 		if(provider.isEmpty()) return fallback;
 		return function.apply(provider);

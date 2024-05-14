@@ -3,6 +3,7 @@ package com.github.clevernucleus.opc.impl;
 import java.util.UUID;
 import java.util.function.Function;
 
+import com.github.clevernucleus.opc.CacheInitializer;
 import com.github.clevernucleus.opc.api.CacheableValue;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -25,17 +26,15 @@ public final class OfflinePlayerCacheCommand {
 	private static final SuggestionProvider<ServerCommandSource> SUGGEST_KEYS = (context, builder) -> CommandSource.suggestIdentifiers(OfflinePlayerCacheImpl.keys(), builder);
 	private static final SuggestionProvider<ServerCommandSource> SUGGEST_NAMES = (ctx, builder) -> {
 		final MinecraftServer server = ctx.getSource().getServer();
-		return OfflinePlayerCacheImpl.ifPresent(server, builder.buildFuture(), opc -> {
-			opc.playerNames(server).forEach(builder::suggest);
-			return builder.buildFuture();
-		});
+		OfflinePlayerCacheImpl impl = CacheInitializer.CACHE.get(server.getOverworld().getLevelProperties());
+		impl.playerNames(server).forEach(builder::suggest);
+		return builder.buildFuture();
 	};
 	private static final SuggestionProvider<ServerCommandSource> SUGGEST_UUIDS = (ctx, builder) -> {
 		final MinecraftServer server = ctx.getSource().getServer();
-		return OfflinePlayerCacheImpl.ifPresent(server, builder.buildFuture(), opc -> {
-			opc.playerIds(server).forEach(id -> builder.suggest(String.valueOf(id)));
-			return builder.buildFuture();
-		});
+		OfflinePlayerCacheImpl impl = CacheInitializer.CACHE.get(server.getOverworld().getLevelProperties());
+		impl.playerIds(server).forEach(id -> builder.suggest(String.valueOf(id)));
+		return builder.buildFuture();
 	};
 	
 	private static <T> ArgumentCommandNode<ServerCommandSource, Identifier> getKey(Function<CommandContext<ServerCommandSource>, T> input) {
@@ -45,23 +44,23 @@ public final class OfflinePlayerCacheCommand {
 			CacheableValue<?> value = OfflinePlayerCacheImpl.getKey(identifier);
 			
 			if(value == null) {
-				ctx.getSource().sendFeedback((Text.literal(id + " -> null key")).formatted(Formatting.RED), false);
+				ctx.getSource().sendFeedback(() -> (Text.literal(id + " -> null key")).formatted(Formatting.RED), false);
 				return -1;
 			}
 			
 			MinecraftServer server = ctx.getSource().getServer();
-			
-			return OfflinePlayerCacheImpl.ifPresent(server, -1, opc -> {
-				Object obj = (id instanceof String ? opc.get(server, (String)id, value) : (id instanceof UUID ? opc.get(server, (UUID)id, value) : null));
-				ctx.getSource().sendFeedback((Text.literal(id + " -> " + identifier + " = " + obj)).formatted(Formatting.GRAY), false);
-				
-				if(obj instanceof Number) {
-					int number = (int)(Integer)obj;
-					return Math.abs(number) % 16;
-				}
-				
-				return 1;
-			});
+
+			OfflinePlayerCacheImpl opc = CacheInitializer.CACHE.get(server.getOverworld().getLevelProperties());
+
+			Object obj = (id instanceof String ? opc.get(server, (String)id, value) : (id instanceof UUID ? opc.get(server, (UUID)id, value) : null));
+			ctx.getSource().sendFeedback(() -> (Text.literal(id + " -> " + identifier + " = " + obj)).formatted(Formatting.GRAY), false);
+
+			if(obj instanceof Number) {
+				int number = (int)(Integer)obj;
+				return Math.abs(number) % 16;
+			}
+
+			return 1;
 		}).build();
 	}
 	
@@ -72,23 +71,23 @@ public final class OfflinePlayerCacheCommand {
 			CacheableValue<?> value = OfflinePlayerCacheImpl.getKey(identifier);
 			
 			if(value == null) {
-				ctx.getSource().sendFeedback((Text.literal(id + " -> null key")).formatted(Formatting.RED), false);
+				ctx.getSource().sendFeedback(() -> (Text.literal(id + " -> null key")).formatted(Formatting.RED), false);
 				return -1;
 			}
 			
 			MinecraftServer server = ctx.getSource().getServer();
-			
-			return OfflinePlayerCacheImpl.ifPresent(server, -1, opc -> {
-				if(id instanceof String) {
-					opc.uncache((String)id, value);
-				} else if(id instanceof UUID) {
-					opc.uncache((UUID)id, value);
-				}
-				
-				ctx.getSource().sendFeedback((Text.literal("-" + id + " -" + identifier)).formatted(Formatting.GRAY), false);
-				
-				return 1;
-			});
+
+			OfflinePlayerCacheImpl opc = CacheInitializer.CACHE.get(server.getOverworld().getLevelProperties());
+
+			if(id instanceof String) {
+				opc.uncache((String)id, value);
+			} else if(id instanceof UUID) {
+				opc.uncache((UUID)id, value);
+			}
+
+			ctx.getSource().sendFeedback(() -> (Text.literal("-" + id + " -" + identifier)).formatted(Formatting.GRAY), false);
+
+			return 1;
 		}).build();
 	}
 	
@@ -116,22 +115,20 @@ public final class OfflinePlayerCacheCommand {
 		LiteralCommandNode<ServerCommandSource> id2 = CommandManager.literal("uuid").build();
 		ArgumentCommandNode<ServerCommandSource, String> name = CommandManager.argument("name", StringArgumentType.string()).suggests(SUGGEST_NAMES).executes(ctx -> {
 			final MinecraftServer server = ctx.getSource().getServer();
-			return OfflinePlayerCacheImpl.ifPresent(server, -1, opc -> {
-				String player = StringArgumentType.getString(ctx, "name");
-				opc.uncache(player);
-				ctx.getSource().sendFeedback((Text.literal("-" + player + " -*")).formatted(Formatting.GRAY), false);
-				return 1;
-			});
+			OfflinePlayerCacheImpl opc = CacheInitializer.CACHE.get(server);
+			String player = StringArgumentType.getString(ctx, "name");
+			opc.uncache(player);
+			ctx.getSource().sendFeedback(() -> (Text.literal("-" + player + " -*")).formatted(Formatting.GRAY), false);
+			return 1;
 		}).build();
 		ArgumentCommandNode<ServerCommandSource, Identifier> key1 = removeKey(ctx -> StringArgumentType.getString(ctx, "name"));
 		ArgumentCommandNode<ServerCommandSource, UUID> uuid = CommandManager.argument("uuid", UuidArgumentType.uuid()).suggests(SUGGEST_UUIDS).executes(ctx -> {
 			final MinecraftServer server = ctx.getSource().getServer();
-			return OfflinePlayerCacheImpl.ifPresent(server, -1, opc -> {
-				UUID player = UuidArgumentType.getUuid(ctx, "uuid");
-				opc.uncache(player);
-				ctx.getSource().sendFeedback((Text.literal("-" + player + " -*")).formatted(Formatting.GRAY), false);
-				return 1;
-			});
+			OfflinePlayerCacheImpl opc = CacheInitializer.CACHE.get(server);
+			UUID player = UuidArgumentType.getUuid(ctx, "uuid");
+			opc.uncache(player);
+			ctx.getSource().sendFeedback(() -> (Text.literal("-" + player + " -*")).formatted(Formatting.GRAY), false);
+			return 1;
 		}).build();
 		ArgumentCommandNode<ServerCommandSource, Identifier> key2 = removeKey(ctx -> UuidArgumentType.getUuid(ctx, "uuid"));
 		

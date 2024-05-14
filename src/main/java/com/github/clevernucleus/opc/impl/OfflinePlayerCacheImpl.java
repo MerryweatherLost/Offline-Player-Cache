@@ -13,15 +13,17 @@ import com.github.clevernucleus.opc.api.CacheableValue;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.mojang.authlib.GameProfile;
+import dev.onyxstudios.cca.api.v3.component.Component;
 
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 import net.minecraft.world.WorldProperties;
 
-public final class OfflinePlayerCacheImpl {
+public final class OfflinePlayerCacheImpl implements Component {
 	private static final Map<Identifier, CacheableValue<?>> KEYS = new HashMap<>();
 	private final Map<UUID, Map<CacheableValue<?>, ?>> cache;
 	private final BiMap<String, UUID> nameToId;
@@ -91,8 +93,7 @@ public final class OfflinePlayerCacheImpl {
 	}
 	
 	protected Collection<String> playerNames(final MinecraftServer server) {
-		Set<String> set = new HashSet<String>();
-		this.nameToId.keySet().forEach(set::add);
+		Set<String> set = new HashSet<>(this.nameToId.keySet());
 		
 		for(ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
 			GameProfile profile = player.getGameProfile();
@@ -170,7 +171,7 @@ public final class OfflinePlayerCacheImpl {
 		return this.uncache(uuid);
 	}
 	
-	public NbtList writeToNbt() {
+	public void writeToNbt(NbtCompound compound) {
 		NbtList list = new NbtList();
 		Map<UUID, String> names = this.nameToId.inverse();
 		
@@ -192,10 +193,31 @@ public final class OfflinePlayerCacheImpl {
 			list.add(entry);
 		}
 		
-		return list;
+		compound.put("OfflinePlayerCache", list);
 	}
-	
-	public void readFromNbt(final NbtList list) {
+
+	/**
+	 * Indicates whether some other object is "equal to" this component.
+	 *
+	 * <p> A well-defined equality is required by some modules, like {@code cardinal-components-item}.
+	 *
+	 * @param o
+	 * @see Object#equals(Object)
+	 */
+	@Override
+	public boolean equals(Object o) {
+		if (!(o instanceof OfflinePlayerCacheImpl impl)) return false;
+
+		Set<UUID> uuidSet = impl.nameToId.values();
+		Set<UUID> internalUuidSet = this.nameToId.values();
+
+		return uuidSet.equals(internalUuidSet); // if users are same on both servers
+	}
+
+	public void readFromNbt(NbtCompound compound) {
+		if (!compound.contains("OfflinePlayerCache")) return;
+
+		NbtList list = compound.getList("OfflinePlayerCache", NbtElement.LIST_TYPE);
 		if(list == null || list.isEmpty()) return;
 		this.cache.clear();
 		this.nameToId.clear();
@@ -228,13 +250,6 @@ public final class OfflinePlayerCacheImpl {
 	
 	public static CacheableValue<?> getKey(final Identifier key) {
 		return KEYS.getOrDefault(key, (CacheableValue<?>)null);
-	}
-	
-	public static <T> T ifPresent(final MinecraftServer server, final T fallback, final Function<OfflinePlayerCacheImpl, T> function) {
-		WorldProperties worldProperties = server.getOverworld().getLevelProperties();
-		
-		if(!(worldProperties instanceof OfflinePlayerCacheData)) return fallback;
-		return function.apply(((OfflinePlayerCacheData)worldProperties).offlinePlayerCache());
 	}
 	
 	@SuppressWarnings("unchecked")
