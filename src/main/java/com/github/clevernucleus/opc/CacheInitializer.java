@@ -29,7 +29,6 @@ public class CacheInitializer implements ModInitializer, LevelComponentInitializ
 	@Override
 	public void onInitialize() {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> OfflinePlayerCacheCommand.register(dispatcher));
-
 	}
 
 	/**

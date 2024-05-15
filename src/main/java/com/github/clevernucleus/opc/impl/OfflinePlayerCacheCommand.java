@@ -1,5 +1,8 @@
 package com.github.clevernucleus.opc.impl;
 
+
+import static net.minecraft.server.command.CommandManager.*;
+
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -9,14 +12,11 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
-import com.mojang.brigadier.tree.ArgumentCommandNode;
-import com.mojang.brigadier.tree.LiteralCommandNode;
 
 import net.minecraft.command.CommandSource;
 import net.minecraft.command.argument.IdentifierArgumentType;
 import net.minecraft.command.argument.UuidArgumentType;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -36,115 +36,132 @@ public final class OfflinePlayerCacheCommand {
 		impl.playerIds(server).forEach(id -> builder.suggest(String.valueOf(id)));
 		return builder.buildFuture();
 	};
-	
-	private static <T> ArgumentCommandNode<ServerCommandSource, Identifier> getKey(Function<CommandContext<ServerCommandSource>, T> input) {
-		return CommandManager.argument("key", IdentifierArgumentType.identifier()).suggests(SUGGEST_KEYS).executes(ctx -> {
-			T id = input.apply(ctx);
-			Identifier identifier = IdentifierArgumentType.getIdentifier(ctx, "key");
-			CacheableValue<?> value = OfflinePlayerCacheImpl.getKey(identifier);
-			
-			if(value == null) {
-				ctx.getSource().sendFeedback(() -> (Text.literal(id + " -> null key")).formatted(Formatting.RED), false);
-				return -1;
-			}
-			
-			MinecraftServer server = ctx.getSource().getServer();
 
-			OfflinePlayerCacheImpl opc = CacheInitializer.CACHE.get(server.getOverworld().getLevelProperties());
-
-			Object obj = (id instanceof String ? opc.get(server, (String)id, value) : (id instanceof UUID ? opc.get(server, (UUID)id, value) : null));
-			ctx.getSource().sendFeedback(() -> (Text.literal(id + " -> " + identifier + " = " + obj)).formatted(Formatting.GRAY), false);
-
-			if(obj instanceof Number) {
-				int number = (int)(Integer)obj;
-				return Math.abs(number) % 16;
-			}
-
-			return 1;
-		}).build();
-	}
-	
-	private static <T> ArgumentCommandNode<ServerCommandSource, Identifier> removeKey(Function<CommandContext<ServerCommandSource>, T> input) {
-		return CommandManager.argument("key", IdentifierArgumentType.identifier()).suggests(SUGGEST_KEYS).executes(ctx -> {
-			T id = input.apply(ctx);
-			Identifier identifier = IdentifierArgumentType.getIdentifier(ctx, "key");
-			CacheableValue<?> value = OfflinePlayerCacheImpl.getKey(identifier);
-			
-			if(value == null) {
-				ctx.getSource().sendFeedback(() -> (Text.literal(id + " -> null key")).formatted(Formatting.RED), false);
-				return -1;
-			}
-			
-			MinecraftServer server = ctx.getSource().getServer();
-
-			OfflinePlayerCacheImpl opc = CacheInitializer.CACHE.get(server.getOverworld().getLevelProperties());
-
-			if(id instanceof String) {
-				opc.uncache((String)id, value);
-			} else if(id instanceof UUID) {
-				opc.uncache((UUID)id, value);
-			}
-
-			ctx.getSource().sendFeedback(() -> (Text.literal("-" + id + " -" + identifier)).formatted(Formatting.GRAY), false);
-
-			return 1;
-		}).build();
-	}
-	
-	private static void get(LiteralCommandNode<ServerCommandSource> root) {
-		LiteralCommandNode<ServerCommandSource> get = CommandManager.literal("get").build();
-		LiteralCommandNode<ServerCommandSource> id1 = CommandManager.literal("name").build();
-		LiteralCommandNode<ServerCommandSource> id2 = CommandManager.literal("uuid").build();
-		ArgumentCommandNode<ServerCommandSource, String> name = CommandManager.argument("name", StringArgumentType.string()).suggests(SUGGEST_NAMES).build();
-		ArgumentCommandNode<ServerCommandSource, Identifier> key1 = getKey(ctx -> StringArgumentType.getString(ctx, "name"));
-		ArgumentCommandNode<ServerCommandSource, UUID> uuid = CommandManager.argument("uuid", UuidArgumentType.uuid()).suggests(SUGGEST_UUIDS).build();
-		ArgumentCommandNode<ServerCommandSource, Identifier> key2 = getKey(ctx -> UuidArgumentType.getUuid(ctx, "uuid"));
-		
-		root.addChild(get);
-		get.addChild(id1);
-		get.addChild(id2);
-		id1.addChild(name);
-		id2.addChild(uuid);
-		name.addChild(key1);
-		uuid.addChild(key2);
-	}
-	
-	private static void remove(LiteralCommandNode<ServerCommandSource> root) {
-		LiteralCommandNode<ServerCommandSource> remove = CommandManager.literal("remove").build();
-		LiteralCommandNode<ServerCommandSource> id1 = CommandManager.literal("name").build();
-		LiteralCommandNode<ServerCommandSource> id2 = CommandManager.literal("uuid").build();
-		ArgumentCommandNode<ServerCommandSource, String> name = CommandManager.argument("name", StringArgumentType.string()).suggests(SUGGEST_NAMES).executes(ctx -> {
-			final MinecraftServer server = ctx.getSource().getServer();
-			OfflinePlayerCacheImpl opc = CacheInitializer.CACHE.get(server);
-			String player = StringArgumentType.getString(ctx, "name");
-			opc.uncache(player);
-			ctx.getSource().sendFeedback(() -> (Text.literal("-" + player + " -*")).formatted(Formatting.GRAY), false);
-			return 1;
-		}).build();
-		ArgumentCommandNode<ServerCommandSource, Identifier> key1 = removeKey(ctx -> StringArgumentType.getString(ctx, "name"));
-		ArgumentCommandNode<ServerCommandSource, UUID> uuid = CommandManager.argument("uuid", UuidArgumentType.uuid()).suggests(SUGGEST_UUIDS).executes(ctx -> {
-			final MinecraftServer server = ctx.getSource().getServer();
-			OfflinePlayerCacheImpl opc = CacheInitializer.CACHE.get(server);
-			UUID player = UuidArgumentType.getUuid(ctx, "uuid");
-			opc.uncache(player);
-			ctx.getSource().sendFeedback(() -> (Text.literal("-" + player + " -*")).formatted(Formatting.GRAY), false);
-			return 1;
-		}).build();
-		ArgumentCommandNode<ServerCommandSource, Identifier> key2 = removeKey(ctx -> UuidArgumentType.getUuid(ctx, "uuid"));
-		
-		root.addChild(remove);
-		remove.addChild(id1);
-		remove.addChild(id2);
-		id1.addChild(name);
-		id2.addChild(uuid);
-		name.addChild(key1);
-		uuid.addChild(key2);
-	}
-	
 	public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
-		LiteralCommandNode<ServerCommandSource> root = CommandManager.literal("opc").requires(source -> source.hasPermissionLevel(2)).build();
-		dispatcher.getRoot().addChild(root);
-		get(root);
-		remove(root);
+		dispatcher.register(literal("opc")
+			.requires(serverCommandSource -> serverCommandSource.hasPermissionLevel(2))
+				.then(literal("get")
+					.then(literal("name")
+						.then(argument("name", StringArgumentType.string())
+							.suggests(SUGGEST_NAMES)
+								.then(argument("key", IdentifierArgumentType.identifier())
+									.suggests(SUGGEST_KEYS)
+										.executes(context -> executeGetKey(context, ctx -> StringArgumentType.getString(ctx, "name"))))))
+					.then(literal("uuid")
+						.then(argument("uuid", StringArgumentType.string())
+							.suggests(SUGGEST_UUIDS)
+								.then(argument("key", IdentifierArgumentType.identifier())
+									.suggests(SUGGEST_KEYS)
+										.executes(context -> executeGetKey(context, ctx -> UuidArgumentType.getUuid(ctx, "uuid")))))))
+				.then(literal("remove")
+					.then(literal("name")
+						.then(argument("name", StringArgumentType.string())
+							.suggests(SUGGEST_NAMES)
+								.executes(context -> executeRemoveAllCachedTo(context, ctx -> StringArgumentType.getString(ctx, "name")))
+									.then(argument("key", IdentifierArgumentType.identifier())
+										.suggests(SUGGEST_KEYS)
+											.executes(context -> executeRemoveKey(context, ctx -> StringArgumentType.getString(ctx, "name"))))))
+					.then(literal("uuid")
+						.then(argument("uuid", UuidArgumentType.uuid())
+							.suggests(SUGGEST_UUIDS)
+								.executes(context -> executeRemoveAllCachedTo(context, ctx -> UuidArgumentType.getUuid(ctx, "uuid")))
+									.then(argument("key", IdentifierArgumentType.identifier())
+										.suggests(SUGGEST_KEYS)
+											.executes(context -> executeRemoveKey(context, ctx -> UuidArgumentType.getUuid(ctx, "uuid")))))))
+				/*.then(literal("list") //TODO fix listing of cache values
+					.then(literal("name")
+						.then(argument("name", StringArgumentType.string())
+							.suggests(SUGGEST_NAMES)
+								.executes(context -> executeListKeys(context, ctx -> StringArgumentType.getString(ctx, "name")))))
+					.then(literal("uuid")
+						.then(argument("uuid", UuidArgumentType.uuid())
+							.suggests(SUGGEST_UUIDS)
+								.executes(context -> executeListKeys(context, ctx -> UuidArgumentType.getUuid(ctx, "uuid")))
+								))));
+				 */);
+
+
 	}
+
+	/*private static <T> int executeListKeys(CommandContext<ServerCommandSource> context, Function<CommandContext<ServerCommandSource>, T> input) {
+		T id = input.apply(context);
+
+		MinecraftServer server = context.getSource().getServer();
+		OfflinePlayerCacheImpl opc = CacheInitializer.CACHE.get(server.getOverworld().getLevelProperties());
+
+		Map<CacheableValue<?>, ?> playerCache = (id instanceof String str ? opc.getPlayerCache(str) : (id instanceof UUID uuid ? opc.getPlayerCache(uuid) : null));
+
+		if (playerCache == null) {
+			return -1;
+		}
+
+		playerCache.forEach((cacheableValue, o) -> {
+			context.getSource().sendFeedback(() -> (Text.literal(id + " -> " + cacheableValue.id() + "=" + o)).formatted(Formatting.GRAY), false);
+		});
+
+		return 1;
+	}
+
+	 */
+
+	private static <T> int executeRemoveKey(CommandContext<ServerCommandSource> ctx, Function<CommandContext<ServerCommandSource>, T> input) {
+		T id = input.apply(ctx);
+		Identifier identifier = IdentifierArgumentType.getIdentifier(ctx, "key");
+		CacheableValue<?> value = OfflinePlayerCacheImpl.getKey(identifier);
+
+		if(value == null) {
+			ctx.getSource().sendFeedback(() -> (Text.literal(id + " -> null key")).formatted(Formatting.RED), false);
+			return -1;
+		}
+
+		MinecraftServer server = ctx.getSource().getServer();
+
+		OfflinePlayerCacheImpl opc = CacheInitializer.CACHE.get(server.getOverworld().getLevelProperties());
+
+		if(id instanceof String str) {
+			opc.uncache(str, value);
+		} else if(id instanceof UUID uuid) {
+			opc.uncache(uuid, value);
+		}
+
+		ctx.getSource().sendFeedback(() -> (Text.literal("-" + id + " -" + identifier)).formatted(Formatting.GRAY), false);
+
+		return 1;
+	}
+
+	private static <T> int executeRemoveAllCachedTo(CommandContext<ServerCommandSource> context, Function<CommandContext<ServerCommandSource>, T> input) {
+		T uuidOrPlayer = input.apply(context);
+		MinecraftServer server = context.getSource().getServer();
+		OfflinePlayerCacheImpl opc = CacheInitializer.CACHE.get(server.getOverworld().getLevelProperties());
+		boolean executed = (uuidOrPlayer instanceof String str ? opc.uncache(str) : (uuidOrPlayer instanceof UUID uuid && opc.uncache(uuid)));
+		context.getSource().sendFeedback(() -> (Text.literal("-" + uuidOrPlayer + " -*")).formatted(Formatting.GRAY), false);
+		return executed ? 1 : -1;
+	}
+
+	private static <T> int executeGetKey(CommandContext<ServerCommandSource> ctx, Function<CommandContext<ServerCommandSource>, T> input) {
+		T id = input.apply(ctx);
+		Identifier identifier = IdentifierArgumentType.getIdentifier(ctx, "key");
+		CacheableValue<?> value = OfflinePlayerCacheImpl.getKey(identifier);
+
+		if(value == null) {
+			ctx.getSource().sendFeedback(() -> (Text.literal(id + " -> null key")).formatted(Formatting.RED), false);
+			return -1;
+		}
+
+		MinecraftServer server = ctx.getSource().getServer();
+
+		OfflinePlayerCacheImpl opc = CacheInitializer.CACHE.get(server.getOverworld().getLevelProperties());
+
+		Object obj = (id instanceof String str ? opc.get(server, str, value) : (id instanceof UUID uuid? opc.get(server, uuid, value) : null));
+		ctx.getSource().sendFeedback(() -> (Text.literal(id + " -> " + identifier + " = " + obj)).formatted(Formatting.GRAY), false);
+
+		if(obj instanceof Number) {
+			int number = (int)(Integer)obj;
+			return Math.abs(number) % 16;
+		}
+
+		return 1;
+	}
+
+
 }
