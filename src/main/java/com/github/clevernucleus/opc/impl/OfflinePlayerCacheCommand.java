@@ -68,7 +68,7 @@ public final class OfflinePlayerCacheCommand {
 									.then(argument("key", IdentifierArgumentType.identifier())
 										.suggests(SUGGEST_KEYS)
 											.executes(context -> executeRemoveKey(context, ctx -> UuidArgumentType.getUuid(ctx, "uuid")))))))
-				/*.then(literal("list") //TODO fix listing of cache values
+				.then(literal("list")
 					.then(literal("name")
 						.then(argument("name", StringArgumentType.string())
 							.suggests(SUGGEST_NAMES)
@@ -76,33 +76,25 @@ public final class OfflinePlayerCacheCommand {
 					.then(literal("uuid")
 						.then(argument("uuid", UuidArgumentType.uuid())
 							.suggests(SUGGEST_UUIDS)
-								.executes(context -> executeListKeys(context, ctx -> UuidArgumentType.getUuid(ctx, "uuid")))
-								))));
-				 */);
+								.executes(context -> executeListKeys(context, ctx -> UuidArgumentType.getUuid(ctx, "uuid")))))));
+
 
 
 	}
 
-	/*private static <T> int executeListKeys(CommandContext<ServerCommandSource> context, Function<CommandContext<ServerCommandSource>, T> input) {
+	private static <T> int executeListKeys(CommandContext<ServerCommandSource> context, Function<CommandContext<ServerCommandSource>, T> input) {
 		T id = input.apply(context);
 
 		MinecraftServer server = context.getSource().getServer();
 		OfflinePlayerCacheImpl opc = CacheInitializer.CACHE.get(server.getOverworld().getLevelProperties());
 
-		Map<CacheableValue<?>, ?> playerCache = (id instanceof String str ? opc.getPlayerCache(str) : (id instanceof UUID uuid ? opc.getPlayerCache(uuid) : null));
-
-		if (playerCache == null) {
-			return -1;
-		}
-
-		playerCache.forEach((cacheableValue, o) -> {
-			context.getSource().sendFeedback(() -> (Text.literal(id + " -> " + cacheableValue.id() + "=" + o)).formatted(Formatting.GRAY), false);
+		OfflinePlayerCacheImpl.values().forEach(value -> {
+			Object obj = (id instanceof String str ? opc.get(server, str, value) : (id instanceof UUID uuid? opc.get(server, uuid, value) : null));
+			context.getSource().sendFeedback(() -> (Text.literal(id + " -> " + value.id() + " = " + obj)).formatted(Formatting.GRAY), false);
 		});
 
 		return 1;
 	}
-
-	 */
 
 	private static <T> int executeRemoveKey(CommandContext<ServerCommandSource> ctx, Function<CommandContext<ServerCommandSource>, T> input) {
 		T id = input.apply(ctx);

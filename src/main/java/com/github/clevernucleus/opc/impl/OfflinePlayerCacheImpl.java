@@ -247,6 +247,10 @@ public final class OfflinePlayerCacheImpl implements Component {
 	public static Collection<Identifier> keys() {
 		return KEYS.keySet();
 	}
+
+	public static Collection<CacheableValue<?>> values() {
+		return KEYS.values();
+	}
 	
 	public static CacheableValue<?> getKey(final Identifier key) {
 		return KEYS.getOrDefault(key, (CacheableValue<?>)null);
